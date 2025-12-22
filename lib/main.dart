@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart'; // Para kIsWeb
+import 'package:flutter/foundation.dart'; // Necesario para 'kIsWeb'
 
-// --- IMPORTACIONES DE TUS PANTALLAS ---
+// --- TUS PANTALLAS ---
 import 'screens/login_screen.dart';
-import 'screens/dashboard_screen.dart';      // <--- Faltaba o es crucial
-import 'screens/home_screen.dart';           // Formulario de creación
-import 'screens/historial_screen.dart';      // Historial
-import 'screens/edicion_list_screen.dart';   // <--- Nueva pantalla de edición
+import 'screens/dashboard_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/historial_screen.dart';
+import 'screens/edicion_list_screen.dart';
+
+// --- IMPORTAMOS LA WEB ---
+import 'web/landing_page.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +22,7 @@ void main() async {
     if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
       await Firebase.initializeApp(
         options: const FirebaseOptions(
-            apiKey: "AIzaSyAU4KF0ho3TGJIYLypUSVWTUepGQqD_QZY", // Tu API Key
+            apiKey: "AIzaSyAU4KF0ho3TGJIYLypUSVWTUepGQqD_QZY", 
             appId: "1:332388584766:web:626bfcd360de668533f06f",
             messagingSenderId: "332388584766",
             projectId: "software-aquater-ltda",
@@ -30,11 +33,15 @@ void main() async {
       await Firebase.initializeApp();
     }
   } catch (e) {
-    print("⚠️ Firebase ya estaba inicializado o hubo un error: $e");
+    print("⚠️ Firebase error: $e");
   }
 
-  // 2. CONFIGURACIÓN DE PERSISTENCIA (OFFLINE)
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  // 2. CONFIGURACIÓN DE PERSISTENCIA (Solo si NO es web para evitar errores de cache)
+  if (!kIsWeb) {
+    try {
+      FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+    } catch (_) {}
+  }
 
   runApp(const AquaterApp());
 }
@@ -42,21 +49,15 @@ void main() async {
 class AquaterApp extends StatelessWidget {
   const AquaterApp({super.key});
 
-  // Color Corporativo
   static const Color primaryBlue = Color(0xFF0D47A1);
 
   @override
   Widget build(BuildContext context) {
-    // 3. LÓGICA DE SESIÓN
-    // Si hay usuario, vamos al Dashboard. Si no, al Login.
-    final usuario = FirebaseAuth.instance.currentUser;
-    final String rutaInicial = usuario != null ? '/dashboard' : '/login';
-
     return MaterialApp(
-      title: 'Aquater Software',
+      title: 'Aquater Ltda.', // Título en la pestaña del navegador
       debugShowCheckedModeBanner: false,
       
-      // 4. TEMA VISUAL GLOBAL
+      // TEMA VISUAL
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -71,6 +72,7 @@ class AquaterApp extends StatelessWidget {
           centerTitle: true,
           elevation: 4,
         ),
+        // Estilo de inputs global
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -83,22 +85,43 @@ class AquaterApp extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: primaryBlue, width: 2.5),
           ),
-          border: OutlineInputBorder(
-             borderRadius: BorderRadius.circular(12),
-          ),
-          labelStyle: TextStyle(color: Colors.blueGrey[700], fontWeight: FontWeight.w500),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
 
-      // 5. RUTAS DE NAVEGACIÓN
-      initialRoute: rutaInicial, 
+      // 3. AQUÍ ESTÁ EL CAMBIO CRÍTICO:
+      // Usamos 'home' con una función que decide qué mostrar
+      home: _getPantallaInicial(),
+
+      // Definimos las rutas para navegar DESPUÉS de entrar
       routes: {
+        '/landing': (context) => const LandingPage(),
         '/login': (context) => const LoginScreen(),
-        '/dashboard': (context) => const DashboardScreen(),      // Menú Principal
-        '/home': (context) => const HomeScreen(),                // Formulario (Crear/Editar)
-        '/historial': (context) => const HistorialScreen(),      // Ver Historial
-        '/edicion': (context) => const EdicionListScreen(),      // Lista para Editar
+        '/dashboard': (context) => const DashboardScreen(),
+        '/home': (context) => const HomeScreen(),
+        '/historial': (context) => const HistorialScreen(),
+        '/edicion': (context) => const EdicionListScreen(),
       },
     );
+  }
+
+  // --- LÓGICA DE DECISIÓN (EL CEREBRO DE LA APP) ---
+  Widget _getPantallaInicial() {
+    // A. ¿Estamos en un Navegador Web?
+    if (kIsWeb) {
+      // SIEMPRE mostrar Landing Page primero (Marketing)
+      // El botón "Acceso Clientes" en la Landing se encargará de llevar al Login
+      return const LandingPage();
+    }
+
+    // B. ¿Estamos en una App Móvil (Android APK)?
+    // Aquí sí queremos ahorrar tiempo al técnico.
+    // Si ya inició sesión, lo mandamos directo al Dashboard.
+    final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario != null) {
+      return const DashboardScreen();
+    } else {
+      return const LoginScreen();
+    }
   }
 }
