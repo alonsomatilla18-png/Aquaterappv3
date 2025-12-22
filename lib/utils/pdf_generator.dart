@@ -10,8 +10,7 @@ class PdfGenerator {
   static const PdfColor _aquaterBlue = PdfColor.fromInt(0xFF0D47A1);
   static const PdfColor _aquaterLightBlue = PdfColor.fromInt(0xFFBBDEFB);
   static const PdfColor _greyHeader = PdfColor.fromInt(0xFFE0E0E0);
-  static const PdfColor _borderColor = PdfColor.fromInt(0xFFBDBDBD);
-
+  
   // ESTILOS DE TEXTO
   final pw.TextStyle _headerStyle = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: _aquaterBlue);
   final pw.TextStyle _subHeaderStyle = pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: _aquaterBlue);
@@ -19,21 +18,22 @@ class PdfGenerator {
   final pw.TextStyle _tableCellStyle = const pw.TextStyle(fontSize: 9);
   final pw.TextStyle _equipmentTitleStyle = pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.white);
 
-  // DATOS DE FIRMAS (Hardcoded por simplicidad)
-  final Map<String, String> mapaFirmas = {
+  // OPTIMIZACIÓN: Mapas estáticos para no recrearlos en memoria cada vez
+  static const Map<String, String> mapaFirmas = {
     "Jorge Raúl Cornejo Sotomayor": "assets/images/firma_jorge.png",
     "Marco Antonio Matilla Bustos": "assets/images/firma_marco.png",
     "Maximiliano Nicolas Vásquez Canto": "assets/images/firma_maximiliano.png",
     "Gustavo David Cornejo Sotomayor": "assets/images/firma_gustavo.png",
   };
-  final Map<String, String> mapaRutsTecnicos = {
+  
+  static const Map<String, String> mapaRutsTecnicos = {
     "Jorge Raúl Cornejo Sotomayor": "13.248.393-0",
     "Marco Antonio Matilla Bustos": "6.220.340-4",
     "Maximiliano Nicolas Vásquez Canto": "13.914.943-2",
     "Gustavo David Cornejo Sotomayor": "13.248.394-9",
   };
 
-  // --- LOGICA DE IMAGENES ---
+  // LOGICA DE IMAGENES
   Future<pw.ImageProvider> _getLogoCliente(String cliente) async {
     String assetPath = 'assets/images/logo_duoc.png';
     String c = cliente.toLowerCase();
@@ -49,9 +49,7 @@ class PdfGenerator {
     return 50;
   }
 
-  // ===========================================================================
-  // REPORTE 1: MANTENCIÓN BOMBAS
-  // ===========================================================================
+  // REPORTE 1: MANTENCIÓN
   Future<Uint8List> generarPdfMantencion(InformeMantencion informe, List<XFile>? fotosLocales, Uint8List? firmaInspeccionaBytes) async {
     final pdf = pw.Document();
     pw.ImageProvider? logoAquater; try { logoAquater = await imageFromAssetBundle('assets/images/logo_aquater.png'); } catch (_) {}
@@ -94,7 +92,6 @@ class PdfGenerator {
             contenido.add(_templateBomUnified(equipo));
           } else if (equipo.tipoBomba.startsWith('ta')) contenido.add(_templateTableroUnified(equipo));
           else contenido.add(_templateGenericoUnified(equipo));
-          
           contenido.add(pw.SizedBox(height: 20));
         }
 
@@ -115,26 +112,15 @@ class PdfGenerator {
     return pdf.save();
   }
 
-  // --- TEMPLATES UNIFICADOS (TRUCO: 1 SOLA TABLA PARA TODO EL EQUIPO) ---
-
+  // --- TEMPLATES UNIFICADOS ---
   pw.Widget _templateBomUnified(DetalleMantencionBomba e) {
-    // Definimos una tabla de 1 sola columna externa.
-    // Dentro de cada fila, "dibujamos" las columnas usando Rows.
-    // Esto permite que el PDF corte la tabla entre cualquier fila sin problemas.
     return pw.Table(
       border: pw.TableBorder.all(color: _aquaterBlue, width: 1.5),
       columnWidths: {0: const pw.FlexColumnWidth()},
       children: [
-        // 1. TÍTULO AZUL
         _rowTitle(e.nombreEquipo, e.ubicacion),
-        
-        // 2. SUBTITULO
         _rowSubtitle("Inspección Mecánica e Hidráulica"),
-        
-        // 3. ENCABEZADO CHECKLIST (Simulado)
         _rowChecklistHeader(),
-        
-        // 4. ITEMS DEL CHECKLIST (Cada uno es una fila real de la tabla padre)
         ..._buildChecklistRows([
           "1. Inspección visual de la bomba, detección de fugas en el sello mecánico del eje.", 
           "2. Medida de la temperatura del cuerpo de la bomba (en funcionamiento si es posible).", 
@@ -142,17 +128,8 @@ class PdfGenerator {
           "4. Inspección operativa de llaves de paso, válvulas de retención y sensores asociados.", 
           "5. Revisión completa del sistema de llenado de los estanques de acumulación de agua potable."
         ], e.checklist, "mec"),
-
-        // 5. SUBTITULO MEDICIONES
         _rowSubtitle("Mediciones Eléctricas"),
-
-        // 6. MEDICIONES (Integradas como fila)
-        pw.TableRow(children: [
-          pw.Padding(
-            padding: const pw.EdgeInsets.all(5),
-            child: _tableMedicionesVisual(e) // Aquí sí usamos la tabla de mediciones anidada porque es pequeña y no se romperá mal
-          )
-        ])
+        pw.TableRow(children: [pw.Padding(padding: const pw.EdgeInsets.all(5), child: _tableMedicionesVisual(e))])
       ]
     );
   }
@@ -187,150 +164,21 @@ class PdfGenerator {
       _rowChecklistHeader(),
       ..._buildChecklistRows(["1. Inspección operativa general (ruidos, vibraciones, estado físico)."], e.checklist, "mec"),
     ];
-
     if(e.ampR > 0 || e.voltRT > 0) {
       rows.add(_rowSubtitle("Mediciones Eléctricas (Si aplica)"));
-      rows.add(pw.TableRow(children: [
-          pw.Padding(padding: const pw.EdgeInsets.all(5), child: _tableMedicionesVisual(e))
-      ]));
+      rows.add(pw.TableRow(children: [pw.Padding(padding: const pw.EdgeInsets.all(5), child: _tableMedicionesVisual(e))]));
     }
-
-    return pw.Table(
-      border: pw.TableBorder.all(color: _aquaterBlue, width: 1.5),
-      columnWidths: {0: const pw.FlexColumnWidth()},
-      children: rows
-    );
+    return pw.Table(border: pw.TableBorder.all(color: _aquaterBlue, width: 1.5), columnWidths: {0: const pw.FlexColumnWidth()}, children: rows);
   }
 
-  // --- HELPERS PARA FILAS MAESTRAS ---
-
-  pw.TableRow _rowTitle(String title, String? sub) {
-    return pw.TableRow(
-      decoration: const pw.BoxDecoration(color: _aquaterBlue),
-      children: [
-        pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(title.toUpperCase(), style: _equipmentTitleStyle),
-              if(sub != null && sub.isNotEmpty) pw.Text(sub, style: _equipmentTitleStyle.copyWith(fontSize: 10))
-            ]
-          )
-        )
-      ]
-    );
-  }
-
-  pw.TableRow _rowSubtitle(String title) {
-    return pw.TableRow(
-      decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-      children: [
-        pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-          child: pw.Row(children: [
-            pw.PdfLogo(color: _aquaterBlue), 
-            pw.SizedBox(width: 8), 
-            pw.Text(title, style: _subHeaderStyle)
-          ])
-        )
-      ]
-    );
-  }
-
-  pw.TableRow _rowChecklistHeader() {
-    return pw.TableRow(
-      decoration: const pw.BoxDecoration(color: _aquaterBlue),
-      children: [
-        pw.Row(
-          children: [
-            _expandedCell("Punto de Inspección", 5, true),
-            _expandedCell("Estado", 2, true),
-            _expandedCell("Observaciones", 3, true),
-          ]
-        )
-      ]
-    );
-  }
-
-  List<pw.TableRow> _buildChecklistRows(List<String> items, Map<String, dynamic> check, String prefix) {
-    List<pw.TableRow> rows = [];
-    for(int i=0; i<items.length; i++) {
-      String key = "${prefix}_${i + 1}";
-      String estado = check[key]?['estado'] ?? "---";
-      String obs = check[key]?['obs'] ?? "";
-      bool isEven = i % 2 == 0;
-      
-      PdfColor estadoColor = PdfColors.black; 
-      if(estado == 'No' || estado == 'Malo' || estado.contains('Con problemas')) estadoColor = PdfColors.red900; 
-      if(estado == 'OK' || estado == 'Si' || estado.contains('Sin problemas')) estadoColor = PdfColors.green900;
-
-      rows.add(pw.TableRow(
-        decoration: pw.BoxDecoration(color: isEven ? PdfColors.white : _greyHeader.shade(0.9)),
-        children: [
-          pw.Row(
-            children: [
-               // Usamos Expanded para simular las columnas de la tabla original
-               _expandedCell(items[i], 5, false, alignLeft: true),
-               _expandedCell(estado, 2, false, color: estadoColor, isBold: true),
-               _expandedCell(obs, 3, false, isItalic: true),
-            ]
-          )
-        ]
-      ));
-    }
-    return rows;
-  }
-
-  pw.Widget _expandedCell(String text, int flex, bool isHeader, {bool alignLeft = false, PdfColor? color, bool isBold = false, bool isItalic = false}) {
-    return pw.Expanded(
-      flex: flex,
-      child: pw.Container(
-        padding: const pw.EdgeInsets.all(6),
-        decoration: const pw.BoxDecoration(
-          border: pw.Border(right: pw.BorderSide(color: _greyHeader, width: 0.5)) // Linea vertical separatoria
-        ),
-        alignment: alignLeft ? pw.Alignment.centerLeft : pw.Alignment.center,
-        child: pw.Text(
-          text, 
-          style: isHeader 
-            ? _tableHeaderStyle 
-            : _tableCellStyle.copyWith(
-                color: color, 
-                fontWeight: isBold ? pw.FontWeight.bold : null,
-                fontStyle: isItalic ? pw.FontStyle.italic : null
-              ),
-          textAlign: alignLeft ? pw.TextAlign.left : pw.TextAlign.center
-        )
-      )
-    );
-  }
-
-  // --- TABLAS Y CELDAS ---
-  pw.TableRow _filaTablaEstilizada(String titulo, String valor, bool esGris) => pw.TableRow(decoration: pw.BoxDecoration(color: esGris ? _greyHeader : PdfColors.white), children: [pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(titulo, style: _tableCellStyle.copyWith(fontWeight: pw.FontWeight.bold))), pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(valor, style: _tableCellStyle))]);
-  pw.Widget _celdaEncabezadoVisual(String text) => pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Center(child: pw.Text(text, style: _tableHeaderStyle)));
-  
-  pw.Widget _tableMedicionesVisual(DetalleMantencionBomba e) {
-    return pw.Table(border: pw.TableBorder.all(color: _greyHeader, width: 1), children: [
-        pw.TableRow(decoration: const pw.BoxDecoration(color: _aquaterLightBlue), children: [pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Center(child: pw.Text("CONSUMO (Amperes)", style: _subHeaderStyle.copyWith(fontSize: 10)))), pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Center(child: pw.Text("VOLTAJE (Volts)", style: _subHeaderStyle.copyWith(fontSize: 10))))]),
-        pw.TableRow(children: [_celdaMedicionGrupo(["R: ${e.ampR}", "S: ${e.ampS}", "T: ${e.ampT}"]), _celdaMedicionGrupo(["R-T: ${e.voltRT}", "S-T: ${e.voltST}", "R-S: ${e.voltRS}"])])
-    ]);
-  }
-  pw.Widget _celdaMedicionGrupo(List<String> valores) => pw.Padding(padding: const pw.EdgeInsets.all(10), child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: valores.map((v) => pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: pw.BoxDecoration(border: pw.Border.all(color: _greyHeader), borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4))), child: pw.Text(v, style: _tableCellStyle.copyWith(fontWeight: pw.FontWeight.bold)))).toList()));
-
-  // ===========================================================================
-  // REPORTE 2: FOSA (CERTIFICADO)
-  // ===========================================================================
+  // REPORTE 2: FOSA
   Future<Uint8List> generarPdfFosa(InformeFosa informe, [List<XFile>? fotosLocales]) async { 
     final pdf = pw.Document(); 
     pw.ImageProvider? logoAquater; try { logoAquater = await imageFromAssetBundle('assets/images/logo_aquater.png'); } catch (_) {} 
     pw.ImageProvider logoCliente = await _getLogoCliente(informe.cliente); double logoH = _getLogoHeight(informe.cliente); 
     pw.ImageProvider? piePaginaImg; try { piePaginaImg = await imageFromAssetBundle('assets/images/pie_pagina.png'); } catch (_) {} 
     pw.ImageProvider? firmaTecnico; if (mapaFirmas.containsKey(informe.personaResponsable)) { try { firmaTecnico = await imageFromAssetBundle(mapaFirmas[informe.personaResponsable]!); } catch (_) {} } 
-    
-    // Procesar fotos (bytes)
     List<Uint8List> fotosProcesadas = await _procesarFotosBytes(fotosLocales); 
-    
     pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, margin: const pw.EdgeInsets.only(top: 40, left: 40, right: 40, bottom: 30), footer: (context) => _buildFooter(piePaginaImg), 
     build: (context) => [
       _buildHeader(logoCliente, logoAquater, logoH, informe.codigoCorrelativo), 
@@ -354,9 +202,7 @@ class PdfGenerator {
     return pdf.save(); 
   }
 
-  // ===========================================================================
   // REPORTE 3: SANITIZACION
-  // ===========================================================================
   Future<Uint8List> generarPdfSanitizacion(InformeSanitizacion informe, List<XFile>? fotosLocales, Uint8List? firmaInspeccionaBytes) async { 
     final pdf = pw.Document(); 
     pw.ImageProvider? logoAquater; try { logoAquater = await imageFromAssetBundle('assets/images/logo_aquater.png'); } catch (_) {} 
@@ -364,11 +210,8 @@ class PdfGenerator {
     pw.ImageProvider? piePaginaImg; try { piePaginaImg = await imageFromAssetBundle('assets/images/pie_pagina.png'); } catch (_) {} 
     pw.ImageProvider? firmaTecnicoAquater; String rutTecnico = mapaRutsTecnicos[informe.tecnicoId] ?? ""; 
     if (mapaFirmas.containsKey(informe.tecnicoId)) { try { firmaTecnicoAquater = await imageFromAssetBundle(mapaFirmas[informe.tecnicoId]!); } catch (_) {} } 
-    
-    // Procesar fotos (bytes)
     List<Uint8List> fotosProcesadas = await _procesarFotosBytes(fotosLocales); 
     final fechaTexto = "${informe.fechaServicio.day.toString().padLeft(2,'0')}/${informe.fechaServicio.month.toString().padLeft(2,'0')}/${informe.fechaServicio.year}"; 
-    
     pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, margin: const pw.EdgeInsets.only(top: 40, left: 40, right: 40, bottom: 30), footer: (context) => _buildFooter(piePaginaImg), 
     build: (context) => [
       _buildHeader(logoCliente, logoAquater, logoH, informe.codigoCorrelativo), 
@@ -386,9 +229,7 @@ class PdfGenerator {
     return pdf.save(); 
   }
 
-  // ===========================================================================
   // REPORTE 4: RECUPERACION
-  // ===========================================================================
   Future<Uint8List> generarPdfRecuperacion(InformeRecuperacion informe, List<XFile>? fotosLocales, Uint8List? firmaInspeccionaBytes) async { 
     final pdf = pw.Document(); 
     pw.ImageProvider? logoAquater; try { logoAquater = await imageFromAssetBundle('assets/images/logo_aquater.png'); } catch (_) {} 
@@ -396,12 +237,9 @@ class PdfGenerator {
     pw.ImageProvider? piePaginaImg; try { piePaginaImg = await imageFromAssetBundle('assets/images/pie_pagina.png'); } catch (_) {} 
     pw.ImageProvider? firmaTecnicoAquater; String rutTecnico = mapaRutsTecnicos[informe.tecnicoId] ?? ""; 
     if (mapaFirmas.containsKey(informe.tecnicoId)) { try { firmaTecnicoAquater = await imageFromAssetBundle(mapaFirmas[informe.tecnicoId]!); } catch (_) {} } 
-    
-    // Procesar fotos (bytes)
     List<Uint8List> fotosProcesadas = await _procesarFotosBytes(fotosLocales); 
     final inicio = "${informe.fechaInicio.day}/${informe.fechaInicio.month}/${informe.fechaInicio.year}"; 
     final fin = "${informe.fechaFin.day}/${informe.fechaFin.month}/${informe.fechaFin.year}"; 
-    
     pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, margin: const pw.EdgeInsets.only(top: 40, left: 40, right: 40, bottom: 30), footer: (context) => _buildFooter(piePaginaImg), 
     build: (context) => [
       _buildHeader(logoCliente, logoAquater, logoH, informe.codigoCorrelativo), 
@@ -423,9 +261,7 @@ class PdfGenerator {
     return pdf.save(); 
   }
 
-  // ===========================================================================
   // REPORTE 5: CONSTANCIA
-  // ===========================================================================
   Future<Uint8List> generarPdfConstancia(InformeConstancia informe, List<XFile>? fotosLocales, Uint8List? firmaInspeccionaBytes) async { 
     final pdf = pw.Document(); 
     pw.ImageProvider? logoAquater; try { logoAquater = await imageFromAssetBundle('assets/images/logo_aquater.png'); } catch (_) {} 
@@ -433,11 +269,8 @@ class PdfGenerator {
     pw.ImageProvider? piePaginaImg; try { piePaginaImg = await imageFromAssetBundle('assets/images/pie_pagina.png'); } catch (_) {} 
     pw.ImageProvider? firmaTecnicoAquater; String rutTecnico = mapaRutsTecnicos[informe.tecnicoId] ?? ""; 
     if (mapaFirmas.containsKey(informe.tecnicoId)) { try { firmaTecnicoAquater = await imageFromAssetBundle(mapaFirmas[informe.tecnicoId]!); } catch (_) {} } 
-    
-    // Procesar fotos (bytes)
     List<Uint8List> fotosProcesadas = await _procesarFotosBytes(fotosLocales); 
     final fechaTexto = "${informe.fechaServicio.day}/${informe.fechaServicio.month}/${informe.fechaServicio.year}"; 
-    
     pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, margin: const pw.EdgeInsets.only(top: 40, left: 40, right: 40, bottom: 30), footer: (context) => _buildFooter(piePaginaImg), 
     build: (context) => [
       pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, crossAxisAlignment: pw.CrossAxisAlignment.center, children: [pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [logoAquater != null ? pw.Container(height: 50, child: pw.Image(logoAquater, fit: pw.BoxFit.contain)) : pw.Container(height: 50), if (informe.codigoCorrelativo != null) pw.Text("Nº ${informe.codigoCorrelativo}", style: pw.TextStyle(fontSize: 10, color: PdfColors.red, fontWeight: pw.FontWeight.bold))]), pw.Container(height: logoH, alignment: pw.Alignment.topRight, child: pw.Image(logoCliente, fit: pw.BoxFit.contain))]), 
@@ -456,15 +289,11 @@ class PdfGenerator {
     return pdf.save(); 
   }
 
-  // ===========================================================================
-  // HELPERS (Componentes re-utilizables)
-  // ===========================================================================
-  
+  // --- HELPERS Y UTILS ---
   pw.Widget _buildFirmaBlock(pw.ImageProvider? firma, String titulo) { return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [if (firma != null) pw.Container(height: 60, width: 120, alignment: pw.Alignment.centerLeft, child: pw.Image(firma, fit: pw.BoxFit.contain)) else pw.SizedBox(height: 60), pw.Container(width: 200, height: 1, color: PdfColors.black), pw.Text(titulo, style: const pw.TextStyle(fontSize: 9))]); }
-  
   pw.Widget _buildFirmasDoble(pw.ImageProvider? firmaIzq, Uint8List? firmaDerBytes, String? nombreDer, String? rutDer, String rutTecnico) { return pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, crossAxisAlignment: pw.CrossAxisAlignment.end, children: [pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [if (firmaIzq != null) pw.Container(height: 60, width: 120, child: pw.Image(firmaIzq, fit: pw.BoxFit.contain)) else pw.SizedBox(height: 60), pw.Container(width: 150, height: 1, color: PdfColors.black), pw.SizedBox(height: 2), pw.Text("Firma Responsable Aquater", style: const pw.TextStyle(fontSize: 9)), if (rutTecnico.isNotEmpty) pw.Text("RUT: $rutTecnico", style: const pw.TextStyle(fontSize: 8)), pw.Text("(Aquater Ltda.)", style: const pw.TextStyle(fontSize: 8))]), pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [if (firmaDerBytes != null) pw.Container(height: 60, width: 120, child: pw.Image(pw.MemoryImage(firmaDerBytes), fit: pw.BoxFit.contain)) else pw.SizedBox(height: 60), pw.Container(width: 150, height: 1, color: PdfColors.black), pw.SizedBox(height: 2), pw.Text(nombreDer ?? "", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)), if (rutDer != null && rutDer.isNotEmpty) pw.Text("RUT: $rutDer", style: const pw.TextStyle(fontSize: 9)), pw.Text("Nombre, Rut y Firma Encargado", style: const pw.TextStyle(fontSize: 9))])]); }
-  
-  // --- FUNCIÓN OPTIMIZADA CON COMPRESIÓN (Devuelve bytes puros) ---
+
+  // OPTIMIZACIÓN CLAVE: REDUCCIÓN DE RESOLUCIÓN Y CALIDAD
   Future<List<Uint8List>> _procesarFotosBytes(List<XFile>? fotos) async {
     List<Uint8List> listaBytes = [];
     if (fotos != null && fotos.isNotEmpty) {
@@ -473,9 +302,9 @@ class PdfGenerator {
           final Uint8List originalBytes = await file.readAsBytes();
           final Uint8List compressedBytes = await FlutterImageCompress.compressWithList(
             originalBytes,
-            minHeight: 1280, // Aumentamos un poco la resolución para que se vean bien grandes
-            minWidth: 1280,
-            quality: 70,     // Calidad aceptable
+            minHeight: 800, // CAMBIO: Bajamos de 1280 a 800. Suficiente para PDF A4, mucho menos RAM.
+            minWidth: 800,
+            quality: 70,
           );
           listaBytes.add(compressedBytes);
         } catch (e) {
@@ -486,59 +315,49 @@ class PdfGenerator {
     return listaBytes;
   }
 
-  // --- NUEVA FUNCIÓN: CREAR CUADRÍCULA DE FOTOS (2 POR FILA) ---
   List<pw.Widget> _buildPhotoGrid(List<Uint8List> images) {
     List<pw.Widget> rows = [];
     for (int i = 0; i < images.length; i += 2) {
-      // Foto izquierda
-      pw.Widget leftPhoto = pw.Expanded(
-        child: pw.Container(
-          height: 250, // Altura fija para que se vean grandes
-          decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300)),
-          child: pw.Image(pw.MemoryImage(images[i]), fit: pw.BoxFit.contain),
-        ),
-      );
-
-      // Foto derecha (si existe)
+      pw.Widget leftPhoto = pw.Expanded(child: pw.Container(height: 250, decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300)), child: pw.Image(pw.MemoryImage(images[i]), fit: pw.BoxFit.contain)));
       pw.Widget rightPhoto;
-      if (i + 1 < images.length) {
-        rightPhoto = pw.Expanded(
-          child: pw.Container(
-            height: 250,
-            margin: const pw.EdgeInsets.only(left: 10), // Separación entre fotos
-            decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300)),
-            child: pw.Image(pw.MemoryImage(images[i + 1]), fit: pw.BoxFit.contain),
-          ),
-        );
-      } else {
-        // Si es impar, el lado derecho queda vacío pero ocupando espacio
-        rightPhoto = pw.Expanded(child: pw.Container());
-      }
-
-      rows.add(pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 10),
-        child: pw.Row(children: [leftPhoto, rightPhoto]),
-      ));
+      if (i + 1 < images.length) { rightPhoto = pw.Expanded(child: pw.Container(height: 250, margin: const pw.EdgeInsets.only(left: 10), decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300)), child: pw.Image(pw.MemoryImage(images[i + 1]), fit: pw.BoxFit.contain))); } 
+      else { rightPhoto = pw.Expanded(child: pw.Container()); }
+      rows.add(pw.Padding(padding: const pw.EdgeInsets.only(bottom: 10), child: pw.Row(children: [leftPhoto, rightPhoto])));
     }
     return rows;
   }
   
   pw.Widget _buildHeader(pw.ImageProvider? logo1, pw.ImageProvider? logo2, double logoH, String? corre) { return pw.Column(children: [pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, crossAxisAlignment: pw.CrossAxisAlignment.start, children: [logo1 != null ? pw.Container(height: logoH, child: pw.Image(logo1, fit: pw.BoxFit.contain)) : pw.Container(height: logoH), pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [logo2 != null ? pw.Container(height: 50, child: pw.Image(logo2, fit: pw.BoxFit.contain)) : pw.Container(height: 50), if (corre != null) pw.Text("Nº $corre", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700))])]), pw.SizedBox(height: 10), pw.Divider(thickness: 1, color: _aquaterBlue), pw.SizedBox(height: 20)]); }
-  
-  pw.Widget _buildFooter(pw.ImageProvider? imagen) { if (imagen != null) { return pw.Center(child: pw.Column(mainAxisSize: pw.MainAxisSize.min, crossAxisAlignment: pw.CrossAxisAlignment.center, children: [pw.SizedBox(height: 5), pw.Image(imagen, height: 120, fit: pw.BoxFit.contain)])); } else { return pw.Column(children: [pw.Divider(color: _aquaterBlue), pw.Center(child: pw.Text("Web: www.aquater.cl  |  Mail: contacto@aquater.cl", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)))]); } }
-  
+  pw.Widget _buildFooter(pw.ImageProvider? imagen) { if (imagen != null) { return pw.Center(child: pw.Column(mainAxisSize: pw.MainAxisSize.min, crossAxisAlignment: pw.CrossAxisAlignment.center, children: [pw.SizedBox(height: 5), pw.Image(imagen, height: 120, fit: pw.BoxFit.contain)])); } else { return pw.Column(children: [pw.Divider(color: _aquaterBlue), pw.Center(child: pw.Text("Web: www.aquater.cl  |  Mail: contacto@aquater.cl", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)))]); } }
   pw.TableRow _filaTabla(String titulo, String valor) { return pw.TableRow(children: [pw.Padding(padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8), child: pw.Text(titulo, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10))), pw.Padding(padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8), child: pw.Text(valor, style: const pw.TextStyle(fontSize: 10)))]); }
+  
+  // Helpers Tabla Bombas
+  pw.TableRow _rowTitle(String title, String? sub) { return pw.TableRow(decoration: const pw.BoxDecoration(color: _aquaterBlue), children: [pw.Padding(padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10), child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text(title.toUpperCase(), style: _equipmentTitleStyle), if(sub != null && sub.isNotEmpty) pw.Text(sub, style: _equipmentTitleStyle.copyWith(fontSize: 10))]))]); }
+  pw.TableRow _rowSubtitle(String title) { return pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.grey100), children: [pw.Padding(padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10), child: pw.Row(children: [pw.PdfLogo(color: _aquaterBlue), pw.SizedBox(width: 8), pw.Text(title, style: _subHeaderStyle)]))]); }
+  pw.TableRow _rowChecklistHeader() { return pw.TableRow(decoration: const pw.BoxDecoration(color: _aquaterBlue), children: [pw.Row(children: [_expandedCell("Punto de Inspección", 5, true), _expandedCell("Estado", 2, true), _expandedCell("Observaciones", 3, true)])]); }
+  
+  List<pw.TableRow> _buildChecklistRows(List<String> items, Map<String, dynamic> check, String prefix) {
+    List<pw.TableRow> rows = [];
+    for(int i=0; i<items.length; i++) {
+      String key = "${prefix}_${i + 1}";
+      String estado = check[key]?['estado'] ?? "---";
+      String obs = check[key]?['obs'] ?? "";
+      bool isEven = i % 2 == 0;
+      PdfColor estadoColor = PdfColors.black; 
+      if(estado == 'No' || estado == 'Malo' || estado.contains('Con problemas')) estadoColor = PdfColors.red900; 
+      if(estado == 'OK' || estado == 'Si' || estado.contains('Sin problemas')) estadoColor = PdfColors.green900;
+      rows.add(pw.TableRow(decoration: pw.BoxDecoration(color: isEven ? PdfColors.white : _greyHeader.shade(0.9)), children: [pw.Row(children: [_expandedCell(items[i], 5, false, alignLeft: true), _expandedCell(estado, 2, false, color: estadoColor, isBold: true), _expandedCell(obs, 3, false, isItalic: true)])]));
+    }
+    return rows;
+  }
 
+  pw.Widget _expandedCell(String text, int flex, bool isHeader, {bool alignLeft = false, PdfColor? color, bool isBold = false, bool isItalic = false}) { return pw.Expanded(flex: flex, child: pw.Container(padding: const pw.EdgeInsets.all(6), decoration: const pw.BoxDecoration(border: pw.Border(right: pw.BorderSide(color: _greyHeader, width: 0.5))), alignment: alignLeft ? pw.Alignment.centerLeft : pw.Alignment.center, child: pw.Text(text, style: isHeader ? _tableHeaderStyle : _tableCellStyle.copyWith(color: color, fontWeight: isBold ? pw.FontWeight.bold : null, fontStyle: isItalic ? pw.FontStyle.italic : null), textAlign: alignLeft ? pw.TextAlign.left : pw.TextAlign.center))); }
+  pw.TableRow _filaTablaEstilizada(String titulo, String valor, bool esGris) => pw.TableRow(decoration: pw.BoxDecoration(color: esGris ? _greyHeader : PdfColors.white), children: [pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(titulo, style: _tableCellStyle.copyWith(fontWeight: pw.FontWeight.bold))), pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(valor, style: _tableCellStyle))]);
+  pw.Widget _tableMedicionesVisual(DetalleMantencionBomba e) { return pw.Table(border: pw.TableBorder.all(color: _greyHeader, width: 1), children: [pw.TableRow(decoration: const pw.BoxDecoration(color: _aquaterLightBlue), children: [pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Center(child: pw.Text("CONSUMO (Amperes)", style: _subHeaderStyle.copyWith(fontSize: 10)))), pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Center(child: pw.Text("VOLTAJE (Volts)", style: _subHeaderStyle.copyWith(fontSize: 10))))]), pw.TableRow(children: [_celdaMedicionGrupo(["R: ${e.ampR}", "S: ${e.ampS}", "T: ${e.ampT}"]), _celdaMedicionGrupo(["R-T: ${e.voltRT}", "S-T: ${e.voltST}", "R-S: ${e.voltRS}"])])]); }
+  pw.Widget _celdaMedicionGrupo(List<String> valores) => pw.Padding(padding: const pw.EdgeInsets.all(10), child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: valores.map((v) => pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: pw.BoxDecoration(border: pw.Border.all(color: _greyHeader), borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4))), child: pw.Text(v, style: _tableCellStyle.copyWith(fontWeight: pw.FontWeight.bold)))).toList()));
+  
   pw.Widget _buildObservaciones(String obs) {
     if (obs.isEmpty) return pw.Container();
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text("OBSERVACIONES:", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.black)),
-        pw.SizedBox(height: 5),
-        pw.Text(obs, style: const pw.TextStyle(fontSize: 10)),
-        pw.SizedBox(height: 20),
-      ],
-    );
+    return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [pw.Text("OBSERVACIONES:", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.black)), pw.SizedBox(height: 5), pw.Text(obs, style: const pw.TextStyle(fontSize: 10)), pw.SizedBox(height: 20)]);
   }
 }

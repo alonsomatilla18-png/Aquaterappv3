@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.myapp"
+        applicationId = "com.aquater.app"
         
         // --- CAMBIO REALIZADO 1: Subir versión mínima de Android ---
         // Firebase requiere mínimo 21 o 23.

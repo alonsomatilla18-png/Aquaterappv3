@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "332388584766",
+    "project_id": "software-aquater-ltda",
+    "storage_bucket": "software-aquater-ltda.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:332388584766:android:2519411bd80900c633f06f",
+        "android_client_info": {
+          "package_name": "com.aquater.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "332388584766-rr30p1novlvok44dq0gfch8frpgsggfj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3NHKMVKwd7h2oFyC1pRacsHkMmswaNCc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "332388584766-rr30p1novlvok44dq0gfch8frpgsggfj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "332388584766-pi0f7pj7s1ec5pcv01g2c0k2716rmglm.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.aquater.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,4 @@
+import 'dart:io'; 
 import 'dart:math'; 
 import 'dart:typed_data';
 import 'dart:convert'; 
@@ -7,8 +8,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:signature/signature.dart';
+import 'package:path_provider/path_provider.dart'; 
 
-// --- IMPORTACIONES ---
+// IMPORTACIÓN DEL SERVICIO DE CORREO (Asegúrate de tener email_service.dart creado)
+import '../services/email_service.dart';
+
 import '../models/informe_model.dart';
 import '../services/firebase_service.dart';
 import '../utils/pdf_generator.dart';
@@ -46,13 +50,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String _rolUsuario = 'cargando';
   String _nombreUsuario = '';
   
-  // VARIABLES DE CARGA
   bool _estaCargando = false;
-  String _textoCarga = "Procesando..."; // <--- NUEVO: Texto dinámico
+  String _textoCarga = "Procesando...";
 
-  // Variables de Estado
   String? clienteSeleccionado;
   String? sedeSeleccionada;
+  String? emailJefeSede; // Aquí se guarda el correo del jefe
   String? servicioSeleccionado;
   String? tecnicoSeleccionado;
 
@@ -73,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _fechaFinRecu = DateTime.now();
   final List<XFile> _fotos = [];
 
-  // Controladores
   final _guiaCtrl = TextEditingController();
   final _certCtrl = TextEditingController();
   final _obsCtrl = TextEditingController();
@@ -89,6 +91,19 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _obtenerDatosUsuario(); 
     _inicializarFormulario(); 
+  }
+
+  @override
+  void dispose() {
+    _guiaCtrl.dispose();
+    _certCtrl.dispose();
+    _obsCtrl.dispose();
+    _obsMantencionCtrl.dispose();
+    _nombreInspeccionaCtrl.dispose();
+    _rutInspeccionaCtrl.dispose();
+    _descConstanciaCtrl.dispose();
+    _signatureController.dispose();
+    super.dispose();
   }
 
   Future<void> _inicializarFormulario() async {
@@ -123,6 +138,8 @@ class _HomeScreenState extends State<HomeScreen> {
             (doc) => (doc.data() as Map)['nombre'] == informe.sede
           );
           idSedeEncontrado = docSede.id;
+          // Al editar también cargamos el email
+          emailJefeSede = (docSede.data() as Map)['email_jefe'];
         } catch (_) {}
       }
 
@@ -218,6 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
           listaSedes = query.docs;
           if (!esModoEdicion) {
              sedeSeleccionada = null;
+             emailJefeSede = null;
              _detallesBombas.clear();
           }
         });
@@ -282,7 +300,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // --- PANTALLA DE CARGA MEJORADA ---
     if (_rolUsuario == 'cargando' || _estaCargando) {
       return Scaffold(
         backgroundColor: Colors.white,
@@ -292,34 +309,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Usamos un indicador de progreso LINEAL para variar visualmente
-                // y que se sienta menos "bloqueado"
-                const LinearProgressIndicator(
-                  color: Color(0xFF0D47A1), 
-                  backgroundColor: Color(0xFFE3F2FD),
-                  minHeight: 6,
-                ),
+                const LinearProgressIndicator(color: Color(0xFF0D47A1), backgroundColor: Color(0xFFE3F2FD), minHeight: 6),
                 const SizedBox(height: 30),
-                
-                // Mensaje Principal (Grande)
-                Text(
-                  _rolUsuario == 'cargando' ? "Cargando perfil..." : "Generando Informe",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22, 
-                    fontWeight: FontWeight.bold, 
-                    color: Color(0xFF0D47A1)
-                  ),
-                ),
+                Text(_rolUsuario == 'cargando' ? "Cargando perfil..." : "Generando Informe", textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
                 const SizedBox(height: 15),
-                
-                // Mensaje Dinámico (Cambia paso a paso)
-                if (_estaCargando)
-                  Text(
-                    _textoCarga, // Aquí mostramos el paso actual
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.grey, fontSize: 16, fontStyle: FontStyle.italic),
-                  ),
+                if (_estaCargando) Text(_textoCarga, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 16, fontStyle: FontStyle.italic)),
               ],
             ),
           ),
@@ -371,7 +365,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: const InputDecoration(labelText: 'Sede', prefixIcon: Icon(Icons.place)),
                       initialValue: sedeSeleccionada,
                       items: listaSedes.map((d) => DropdownMenuItem(value: d.id, child: Text((d.data() as Map)['nombre'] ?? ""))).toList(),
-                      onChanged: (v) { setState(() => sedeSeleccionada = v); if (v != null) _configurarBombasSede(v); },
+                      onChanged: (v) { 
+                        setState(() { 
+                          sedeSeleccionada = v;
+                          emailJefeSede = null;
+                          if (v != null) {
+                             try {
+                               var doc = listaSedes.firstWhere((d) => d.id == v);
+                               emailJefeSede = (doc.data() as Map)['email_jefe'];
+                             } catch(_){}
+                          }
+                        }); 
+                        if (v != null) _configurarBombasSede(v); 
+                      },
                     ),
                   ],
                 ),
@@ -511,12 +517,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (sedeSeleccionada == null && !esVentisquero) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Falta seleccionar Sede'))); return; }
     if ((servicioSeleccionado != 'Certificado Fosa') && tecnicoSeleccionado == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Falta seleccionar Técnico'))); return; }
 
-    // --- PASO 1: ACTIVAR CARGA ---
     setState(() {
       _estaCargando = true;
       _textoCarga = "Validando datos...";
     });
-    // Pequeño respiro para que la UI se pinte
     await Future.delayed(const Duration(milliseconds: 100));
     
     try {
@@ -537,7 +541,6 @@ class _HomeScreenState extends State<HomeScreen> {
       String nombreClienteArchivo = nombreCliente.toLowerCase().contains("duoc") ? "" : nombreCliente;
       String nombreArchivo = "";
 
-      // --- PASO 2: PROCESAR FIRMA ---
       setState(() => _textoCarga = "Procesando firma digital...");
       await Future.delayed(const Duration(milliseconds: 50));
 
@@ -553,7 +556,6 @@ class _HomeScreenState extends State<HomeScreen> {
         firmaBase64 = base64Encode(signatureBytes);
       }
 
-      // Crear objeto...
       InformeBase? informe;
       if (servicioSeleccionado == 'Certificado Fosa') {
         int corr = esModoEdicion && widget.informeParaEditar is InformeFosa ? (widget.informeParaEditar as InformeFosa).correlativo : 1;
@@ -575,10 +577,9 @@ class _HomeScreenState extends State<HomeScreen> {
         nombreArchivo = "Constancia $nombreClienteArchivo $nombreSede $fechaFormato $corre.pdf";
       }
 
-      nombreArchivo = nombreArchivo.replaceAll("  ", " ").trim();
+      nombreArchivo = nombreArchivo.replaceAll("  ", " ").trim();
 
       if (informe != null) {
-        // --- PASO 3: GUARDAR EN FIREBASE ---
         setState(() => _textoCarga = "Guardando en la nube...");
         await Future.delayed(const Duration(milliseconds: 50));
 
@@ -588,15 +589,12 @@ class _HomeScreenState extends State<HomeScreen> {
            await _firebaseService.guardarInforme(informe); 
         }
 
-        // --- PASO 4: GENERAR PDF (LO MÁS PESADO) ---
-        setState(() => _textoCarga = "Generando PDF (Puede congelarse unos segundos)...");
-        await Future.delayed(const Duration(milliseconds: 200)); // Esperamos más tiempo aquí para asegurar que el texto se lea
+        setState(() => _textoCarga = "Generando PDF...");
+        await Future.delayed(const Duration(milliseconds: 200));
 
         final pdfGen = PdfGenerator();
         Uint8List? pdfBytes;
 
-        // Aquí es donde suele "pegarse" porque es trabajo de CPU
-        // El texto anterior ya debería estar visible en pantalla.
         if (informe is InformeFosa) {
           pdfBytes = await pdfGen.generarPdfFosa(informe, _fotos);
         } else if (informe is InformeSanitizacion) pdfBytes = await pdfGen.generarPdfSanitizacion(informe, _fotos, signatureBytes);
@@ -605,6 +603,43 @@ class _HomeScreenState extends State<HomeScreen> {
         else if (informe is InformeMantencion) pdfBytes = await pdfGen.generarPdfMantencion(informe, _fotos, signatureBytes);
 
         if (pdfBytes != null) {
+          
+          // --- BLOQUE DE ENVÍO DE CORREO AUTOMÁTICO CON DIAGNÓSTICO ---
+          print("---------------- DIAGNÓSTICO DE CORREO ----------------");
+          print("1. Email Jefe recuperado: '$emailJefeSede'");
+          
+          if (emailJefeSede != null && emailJefeSede!.isNotEmpty && !esModoEdicion) {
+            setState(() => _textoCarga = "Enviando correo SMTP...");
+            try {
+              final output = await getTemporaryDirectory();
+              final file = File("${output.path}/$nombreArchivo");
+              await file.writeAsBytes(pdfBytes);
+              print("2. Archivo temporal guardado: ${file.path}");
+
+              print("3. Conectando con Gmail...");
+              await EmailService.enviarInforme(
+                destinatarioEmail: emailJefeSede!,
+                nombreSede: nombreSede,
+                fecha: fechaFormato,
+                rutaPdf: file.path,
+              );
+              print("4. ¡CORREO ENVIADO EXITOSAMENTE!");
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('📧 Correo enviado al jefe de sede'), backgroundColor: Colors.green)
+              );
+            } catch (e) {
+              print("❌ ERROR SMTP: $e");
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('⚠️ Falló envío de correo: $e'), backgroundColor: Colors.orange)
+              );
+            }
+          } else {
+             print("⚠️ No se envió correo: Email jefe es nulo o modo edición activo.");
+          }
+          print("-------------------------------------------------------");
+          // -----------------------------------------------------------
+
           setState(() => _textoCarga = "¡Listo!");
           if (!mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (context) => PdfPreviewScreen(pdfBytes: pdfBytes!, fileName: nombreArchivo)));
@@ -613,7 +648,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     } catch (e) {
-      print("ERROR: $e"); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      print("ERROR GENERAL: $e"); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally { if (mounted) setState(() => _estaCargando = false); }
   }
 
@@ -621,6 +656,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _guiaCtrl.clear(); _certCtrl.clear(); _obsCtrl.clear(); _obsMantencionCtrl.clear();
     _nombreInspeccionaCtrl.clear(); _rutInspeccionaCtrl.clear(); _descConstanciaCtrl.clear();
     _signatureController.clear(); _fotos.clear(); _detallesBombas.clear();
-    setState(() { servicioSeleccionado = null; _fechaServicio = DateTime.now(); _fechaFinRecu = DateTime.now(); _firmaExistenteBytes = null; });
+    setState(() { servicioSeleccionado = null; _fechaServicio = DateTime.now(); _fechaFinRecu = DateTime.now(); _firmaExistenteBytes = null; emailJefeSede = null; });
   }
 }

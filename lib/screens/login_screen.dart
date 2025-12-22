@@ -9,12 +9,19 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controladores de texto
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   
   bool _isLoading = false;
-  bool _isObscure = true; // Para ocultar/mostrar contraseña
+  bool _isObscure = true;
+
+  // MEJORA: Liberar recursos
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _iniciarSesion() async {
     if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
@@ -27,13 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // INTENTO DE LOGIN CON FIREBASE
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text.trim(),
       );
 
-      // Si pasa, navegamos al Dashboard (CAMBIO REALIZADO AQUÍ)
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/dashboard');
       }
@@ -69,7 +74,6 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // LOGO
               Image.asset(
                 'assets/images/logo_aquater.png',
                 height: 80,
@@ -82,7 +86,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 40),
 
-              // CAMPO CORREO
               TextField(
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
@@ -94,7 +97,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 20),
 
-              // CAMPO CONTRASEÑA
               TextField(
                 controller: _passCtrl,
                 obscureText: _isObscure,
@@ -110,7 +112,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 30),
 
-              // BOTÓN INGRESAR
               SizedBox(
                 width: double.infinity,
                 height: 50,
