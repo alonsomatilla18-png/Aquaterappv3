@@ -1,5 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 
+// --- CLASE BASE ---
 abstract class InformeBase {
   String? id;
   String cliente;
@@ -7,10 +7,10 @@ abstract class InformeBase {
   String tecnicoId;
   DateTime fechaCreacion;
   String tipoServicio;
-  String? firmaUrl;
-  String estado;
-  String observaciones;
   String? codigoCorrelativo;
+  String? firmaUrl; 
+  String? fotoUrl; 
+  String estado;
 
   InformeBase({
     this.id,
@@ -19,41 +19,176 @@ abstract class InformeBase {
     required this.tecnicoId,
     required this.fechaCreacion,
     required this.tipoServicio,
-    this.firmaUrl,
-    this.estado = 'pendiente',
-    this.observaciones = '',
     this.codigoCorrelativo,
+    this.firmaUrl,
+    this.fotoUrl,
+    this.estado = 'borrador',
   });
 
   Map<String, dynamic> toMap();
 
-  // MÉTODO NUEVO: Fábrica inteligente para convertir datos de Firebase a Objetos
   static InformeBase fromMap(Map<String, dynamic> map, String id) {
-    final tipo = map['tipoServicio'];
+    String tipo = map['tipoServicio'] ?? '';
     switch (tipo) {
-      case 'fosa':
-        return InformeFosa.fromMap(map, id);
-      case 'man':
-        return InformeMantencion.fromMap(map, id);
-      case 'sani':
-        return InformeSanitizacion.fromMap(map, id);
-      case 'recu':
-        return InformeRecuperacion.fromMap(map, id);
-      case 'cons':
-        return InformeConstancia.fromMap(map, id);
-      default:
-        // Si hay datos viejos o desconocidos, retornamos una constancia genérica para no romper la app
-        return InformeConstancia.fromMap(map, id); 
+      case 'fosa': return InformeFosa.fromMap(map, id);
+      case 'man': return InformeMantencion.fromMap(map, id);
+      case 'sani': return InformeSanitizacion.fromMap(map, id);
+      case 'recu': return InformeRecuperacion.fromMap(map, id);
+      case 'cons': return InformeConstancia.fromMap(map, id);
+      default: return InformeGenerico.fromMap(map, id);
     }
   }
 }
 
+// --- 1. INFORME FOSA ---
+class InformeFosa extends InformeBase {
+  String guia;
+  String numCertificado;
+  String personaResponsable;
+  DateTime fechaServicio;
+  int correlativo;
+  String observaciones;
+
+  InformeFosa({
+    super.id,
+    required super.cliente,
+    required super.sede,
+    required super.tecnicoId,
+    required super.fechaCreacion,
+    required this.guia,
+    required this.numCertificado,
+    required this.personaResponsable,
+    required this.fechaServicio,
+    required this.correlativo,
+    required this.observaciones,
+    super.codigoCorrelativo,
+    super.fotoUrl,
+    super.firmaUrl,
+    super.estado,
+  }) : super(tipoServicio: 'fosa');
+
+  @override
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'cliente': cliente,
+      'sede': sede,
+      'tecnicoId': tecnicoId,
+      'fechaCreacion': fechaCreacion,
+      'tipoServicio': 'fosa',
+      'guia': guia,
+      'numCertificado': numCertificado,
+      'personaResponsable': personaResponsable,
+      'fechaServicio': fechaServicio,
+      'correlativo': correlativo,
+      'observaciones': observaciones,
+      'codigoCorrelativo': codigoCorrelativo,
+      'fotoUrl': fotoUrl,
+      'firmaUrl': firmaUrl,
+      'estado': estado,
+    };
+  }
+
+  factory InformeFosa.fromMap(Map<String, dynamic> map, String id) {
+    return InformeFosa(
+      id: id,
+      cliente: map['cliente'] ?? '',
+      sede: map['sede'] ?? '',
+      tecnicoId: map['tecnicoId'] ?? '',
+      fechaCreacion: (map['fechaCreacion'] as dynamic).toDate(),
+      guia: map['guia'] ?? '',
+      numCertificado: map['numCertificado'] ?? '',
+      personaResponsable: map['personaResponsable'] ?? '',
+      fechaServicio: (map['fechaServicio'] as dynamic).toDate(),
+      correlativo: map['correlativo'] is int ? map['correlativo'] : 0,
+      observaciones: map['observaciones'] ?? '',
+      codigoCorrelativo: map['codigoCorrelativo'],
+      fotoUrl: map['fotoUrl'],
+      firmaUrl: map['firmaUrl'],
+      estado: map['estado'] ?? 'borrador',
+    );
+  }
+}
+
+// --- 2. INFORME MANTENCIÓN BOMBAS ---
+class InformeMantencion extends InformeBase {
+  String personaResponsable;
+  DateTime fechaServicio;
+  String observaciones;
+  List<DetalleMantencionBomba> equipos;
+  
+  String? nombreInspecciona;
+  String? rutInspecciona;
+
+  InformeMantencion({
+    super.id,
+    required super.cliente,
+    required super.sede,
+    required super.tecnicoId,
+    required super.fechaCreacion,
+    required this.personaResponsable,
+    required this.fechaServicio,
+    required this.observaciones,
+    required this.equipos,
+    this.nombreInspecciona,
+    this.rutInspecciona,
+    super.codigoCorrelativo,
+    super.firmaUrl,
+    super.estado,
+  }) : super(tipoServicio: 'man');
+
+  @override
+  Map<String, dynamic> toMap() {
+    return {
+      'cliente': cliente,
+      'sede': sede,
+      'tecnicoId': tecnicoId,
+      'fechaCreacion': fechaCreacion,
+      'tipoServicio': 'man',
+      'personaResponsable': personaResponsable,
+      'fechaServicio': fechaServicio,
+      'observaciones': observaciones,
+      'equipos': equipos.map((e) => e.toMap()).toList(),
+      'nombreInspecciona': nombreInspecciona,
+      'rutInspecciona': rutInspecciona,
+      'codigoCorrelativo': codigoCorrelativo,
+      'firmaUrl': firmaUrl,
+      'estado': estado,
+    };
+  }
+
+  factory InformeMantencion.fromMap(Map<String, dynamic> map, String id) {
+    var list = map['equipos'] as List? ?? [];
+    List<DetalleMantencionBomba> equiposList = list.map((i) => DetalleMantencionBomba.fromMap(i)).toList();
+
+    return InformeMantencion(
+      id: id,
+      cliente: map['cliente'] ?? '',
+      sede: map['sede'] ?? '',
+      tecnicoId: map['tecnicoId'] ?? '',
+      fechaCreacion: (map['fechaCreacion'] as dynamic).toDate(),
+      personaResponsable: map['personaResponsable'] ?? '',
+      fechaServicio: (map['fechaServicio'] as dynamic).toDate(),
+      observaciones: map['observaciones'] ?? '',
+      equipos: equiposList,
+      nombreInspecciona: map['nombreInspecciona'],
+      rutInspecciona: map['rutInspecciona'],
+      codigoCorrelativo: map['codigoCorrelativo'],
+      firmaUrl: map['firmaUrl'],
+      estado: map['estado'] ?? 'borrador',
+    );
+  }
+}
+
+// SUB-CLASE PARA BOMBAS (Aquí está la protección técnica)
 class DetalleMantencionBomba {
-  String tipoBomba;
+  String tipoBomba; 
   String nombreEquipo;
   String? ubicacion;
-  double ampR, ampS, ampT;
-  double voltRT, voltST, voltRS;
+  
+  double ampR; double ampS; double ampT;
+  double voltRT; double voltST; double voltRS;
+
   Map<String, Map<String, String>> checklist;
 
   DetalleMantencionBomba({
@@ -65,16 +200,19 @@ class DetalleMantencionBomba {
     required this.checklist,
   });
 
-  Map<String, dynamic> toMap() => {
-    'tipoBomba': tipoBomba, 'nombreEquipo': nombreEquipo, 'ubicacion': ubicacion,
-    'ampR': ampR, 'ampS': ampS, 'ampT': ampT,
-    'voltRT': voltRT, 'voltST': voltST, 'voltRS': voltRS,
-    'checklist': checklist,
-  };
+  Map<String, dynamic> toMap() {
+    return {
+      'tipoBomba': tipoBomba,
+      'nombreEquipo': nombreEquipo,
+      'ubicacion': ubicacion,
+      'ampR': ampR, 'ampS': ampS, 'ampT': ampT,
+      'voltRT': voltRT, 'voltST': voltST, 'voltRS': voltRS,
+      'checklist': checklist,
+    };
+  }
 
-  // NUEVO: Para leer el equipo desde Firebase
+  // ✅ PROTECCIÓN CONTRA ERRORES DE TIPO DE DATO
   factory DetalleMantencionBomba.fromMap(Map<String, dynamic> map) {
-    // Conversión segura del checklist
     Map<String, Map<String, String>> checkMap = {};
     if (map['checklist'] != null) {
       (map['checklist'] as Map).forEach((k, v) {
@@ -85,161 +223,217 @@ class DetalleMantencionBomba {
       });
     }
 
+    // Helper técnico: convierte texto a número sin romper la app
+    double toDoubleSafe(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? 0.0;
+    }
+
     return DetalleMantencionBomba(
       tipoBomba: map['tipoBomba'] ?? 'bom',
       nombreEquipo: map['nombreEquipo'] ?? 'Equipo',
       ubicacion: map['ubicacion'],
-      ampR: (map['ampR'] ?? 0).toDouble(),
-      ampS: (map['ampS'] ?? 0).toDouble(),
-      ampT: (map['ampT'] ?? 0).toDouble(),
-      voltRT: (map['voltRT'] ?? 0).toDouble(),
-      voltST: (map['voltST'] ?? 0).toDouble(),
-      voltRS: (map['voltRS'] ?? 0).toDouble(),
+      ampR: toDoubleSafe(map['ampR']),
+      ampS: toDoubleSafe(map['ampS']),
+      ampT: toDoubleSafe(map['ampT']),
+      voltRT: toDoubleSafe(map['voltRT']),
+      voltST: toDoubleSafe(map['voltST']),
+      voltRS: toDoubleSafe(map['voltRS']),
       checklist: checkMap,
     );
   }
 }
 
-class InformeFosa extends InformeBase {
-  String guia; String numCertificado; String personaResponsable; String? fotoUrl; int correlativo; DateTime fechaServicio;
-
-  InformeFosa({super.id, required super.cliente, required super.sede, required super.tecnicoId, required super.fechaCreacion, super.firmaUrl, super.estado, required this.guia, required this.numCertificado, required this.personaResponsable, required this.correlativo, required this.fechaServicio, super.observaciones, super.codigoCorrelativo, this.fotoUrl}) : super(tipoServicio: 'fosa');
-
-  @override Map<String, dynamic> toMap() => {'cliente': cliente, 'sede': sede, 'tecnicoId': tecnicoId, 'fechaCreacion': Timestamp.fromDate(fechaCreacion), 'tipoServicio': 'fosa', 'firmaUrl': firmaUrl, 'estado': estado, 'guia': guia, 'numCertificado': numCertificado, 'personaResponsable': personaResponsable, 'correlativo': correlativo, 'fechaServicio': Timestamp.fromDate(fechaServicio), 'observaciones': observaciones, 'codigoCorrelativo': codigoCorrelativo, 'fotoUrl': fotoUrl};
-
-  // NUEVO: Lectura
-  factory InformeFosa.fromMap(Map<String, dynamic> map, String id) {
-    return InformeFosa(
-      id: id,
-      cliente: map['cliente'] ?? '',
-      sede: map['sede'] ?? '',
-      tecnicoId: map['tecnicoId'] ?? '',
-      fechaCreacion: (map['fechaCreacion'] as Timestamp).toDate(),
-      firmaUrl: map['firmaUrl'],
-      estado: map['estado'] ?? 'pendiente',
-      guia: map['guia'] ?? '',
-      numCertificado: map['numCertificado'] ?? '',
-      personaResponsable: map['personaResponsable'] ?? '',
-      correlativo: map['correlativo'] ?? 0,
-      fechaServicio: (map['fechaServicio'] as Timestamp).toDate(),
-      observaciones: map['observaciones'] ?? '',
-      codigoCorrelativo: map['codigoCorrelativo'],
-      fotoUrl: map['fotoUrl'],
-    );
-  }
-}
-
-class InformeMantencion extends InformeBase {
-  String personaResponsable; DateTime fechaServicio; String? fotoUrl; String? nombreInspecciona; String? rutInspecciona;
-  List<DetalleMantencionBomba> equipos;
-
-  InformeMantencion({super.id, required super.cliente, required super.sede, required super.tecnicoId, required super.fechaCreacion, super.firmaUrl, super.estado, required this.personaResponsable, required this.fechaServicio, required this.equipos, super.observaciones, super.codigoCorrelativo, this.fotoUrl, this.nombreInspecciona, this.rutInspecciona}) : super(tipoServicio: 'man');
-
-  @override Map<String, dynamic> toMap() => {'cliente': cliente, 'sede': sede, 'tecnicoId': tecnicoId, 'fechaCreacion': Timestamp.fromDate(fechaCreacion), 'tipoServicio': 'man', 'firmaUrl': firmaUrl, 'estado': estado, 'personaResponsable': personaResponsable, 'fechaServicio': Timestamp.fromDate(fechaServicio), 'observaciones': observaciones, 'codigoCorrelativo': codigoCorrelativo, 'fotoUrl': fotoUrl, 'nombreInspecciona': nombreInspecciona, 'rutInspecciona': rutInspecciona, 'equipos': equipos.map((e) => e.toMap()).toList()};
-
-  // NUEVO: Lectura
-  factory InformeMantencion.fromMap(Map<String, dynamic> map, String id) {
-    return InformeMantencion(
-      id: id,
-      cliente: map['cliente'] ?? '',
-      sede: map['sede'] ?? '',
-      tecnicoId: map['tecnicoId'] ?? '',
-      fechaCreacion: (map['fechaCreacion'] as Timestamp).toDate(),
-      firmaUrl: map['firmaUrl'],
-      estado: map['estado'] ?? 'pendiente',
-      personaResponsable: map['personaResponsable'] ?? '',
-      fechaServicio: (map['fechaServicio'] as Timestamp).toDate(),
-      observaciones: map['observaciones'] ?? '',
-      codigoCorrelativo: map['codigoCorrelativo'],
-      fotoUrl: map['fotoUrl'],
-      nombreInspecciona: map['nombreInspecciona'],
-      rutInspecciona: map['rutInspecciona'],
-      equipos: (map['equipos'] as List<dynamic>? ?? []).map((e) => DetalleMantencionBomba.fromMap(e)).toList(),
-    );
-  }
-}
-
+// --- 3. INFORME SANITIZACIÓN ---
 class InformeSanitizacion extends InformeBase {
-  DateTime fechaServicio; String descripcion; String? fotoUrl; String? nombreInspecciona; String? rutInspecciona;
+  DateTime fechaServicio;
+  String descripcion;
+  String observaciones;
+  String? nombreInspecciona;
+  String? rutInspecciona;
 
-  InformeSanitizacion({super.id, required super.cliente, required super.sede, required super.tecnicoId, required super.fechaCreacion, super.firmaUrl, super.estado, required this.fechaServicio, required this.descripcion, super.observaciones, super.codigoCorrelativo, this.fotoUrl, this.nombreInspecciona, this.rutInspecciona}) : super(tipoServicio: 'sani');
+  InformeSanitizacion({
+    super.id,
+    required super.cliente,
+    required super.sede,
+    required super.tecnicoId,
+    required super.fechaCreacion,
+    required this.fechaServicio,
+    required this.descripcion,
+    required this.observaciones,
+    this.nombreInspecciona,
+    this.rutInspecciona,
+    super.codigoCorrelativo,
+    super.fotoUrl,
+    super.firmaUrl,
+    super.estado,
+  }) : super(tipoServicio: 'sani');
 
-  @override Map<String, dynamic> toMap() => {'cliente': cliente, 'sede': sede, 'tecnicoId': tecnicoId, 'fechaCreacion': Timestamp.fromDate(fechaCreacion), 'tipoServicio': 'sani', 'firmaUrl': firmaUrl, 'estado': estado, 'fechaServicio': Timestamp.fromDate(fechaServicio), 'descripcion': descripcion, 'observaciones': observaciones, 'codigoCorrelativo': codigoCorrelativo, 'fotoUrl': fotoUrl, 'nombreInspecciona': nombreInspecciona, 'rutInspecciona': rutInspecciona};
+  @override
+  Map<String, dynamic> toMap() => {
+    'cliente': cliente,
+    'sede': sede,
+    'tecnicoId': tecnicoId,
+    'fechaCreacion': fechaCreacion,
+    'tipoServicio': 'sani',
+    'fechaServicio': fechaServicio,
+    'descripcion': descripcion,
+    'observaciones': observaciones,
+    'nombreInspecciona': nombreInspecciona,
+    'rutInspecciona': rutInspecciona,
+    'codigoCorrelativo': codigoCorrelativo,
+    'fotoUrl': fotoUrl,
+    'firmaUrl': firmaUrl,
+    'estado': estado,
+  };
 
-  // NUEVO: Lectura
-  factory InformeSanitizacion.fromMap(Map<String, dynamic> map, String id) {
-    return InformeSanitizacion(
-      id: id,
-      cliente: map['cliente'] ?? '',
-      sede: map['sede'] ?? '',
-      tecnicoId: map['tecnicoId'] ?? '',
-      fechaCreacion: (map['fechaCreacion'] as Timestamp).toDate(),
-      firmaUrl: map['firmaUrl'],
-      estado: map['estado'] ?? 'pendiente',
-      fechaServicio: (map['fechaServicio'] as Timestamp).toDate(),
-      descripcion: map['descripcion'] ?? '',
-      observaciones: map['observaciones'] ?? '',
-      codigoCorrelativo: map['codigoCorrelativo'],
-      fotoUrl: map['fotoUrl'],
-      nombreInspecciona: map['nombreInspecciona'],
-      rutInspecciona: map['rutInspecciona'],
-    );
-  }
+  factory InformeSanitizacion.fromMap(Map<String, dynamic> map, String id) => InformeSanitizacion(
+    id: id,
+    cliente: map['cliente'] ?? '',
+    sede: map['sede'] ?? '',
+    tecnicoId: map['tecnicoId'] ?? '',
+    fechaCreacion: (map['fechaCreacion'] as dynamic).toDate(),
+    fechaServicio: (map['fechaServicio'] as dynamic).toDate(),
+    descripcion: map['descripcion'] ?? '',
+    observaciones: map['observaciones'] ?? '',
+    nombreInspecciona: map['nombreInspecciona'],
+    rutInspecciona: map['rutInspecciona'],
+    codigoCorrelativo: map['codigoCorrelativo'],
+    fotoUrl: map['fotoUrl'],
+    firmaUrl: map['firmaUrl'],
+    estado: map['estado'] ?? 'borrador',
+  );
 }
 
+// --- 4. INFORME RECUPERACIÓN ---
 class InformeRecuperacion extends InformeBase {
-  DateTime fechaInicio; DateTime fechaFin; String? fotoUrl; String? nombreInspecciona; String? rutInspecciona;
+  DateTime fechaInicio;
+  DateTime fechaFin;
+  String observaciones;
+  String? nombreInspecciona;
+  String? rutInspecciona;
 
-  InformeRecuperacion({super.id, required super.cliente, required super.sede, required super.tecnicoId, required super.fechaCreacion, super.firmaUrl, super.estado, required this.fechaInicio, required this.fechaFin, super.observaciones, super.codigoCorrelativo, this.fotoUrl, this.nombreInspecciona, this.rutInspecciona}) : super(tipoServicio: 'recu');
+  InformeRecuperacion({
+    super.id,
+    required super.cliente,
+    required super.sede,
+    required super.tecnicoId,
+    required super.fechaCreacion,
+    required this.fechaInicio,
+    required this.fechaFin,
+    required this.observaciones,
+    this.nombreInspecciona,
+    this.rutInspecciona,
+    super.codigoCorrelativo,
+    super.fotoUrl,
+    super.firmaUrl,
+    super.estado,
+  }) : super(tipoServicio: 'recu');
 
-  @override Map<String, dynamic> toMap() => {'cliente': cliente, 'sede': sede, 'tecnicoId': tecnicoId, 'fechaCreacion': Timestamp.fromDate(fechaCreacion), 'tipoServicio': 'recu', 'firmaUrl': firmaUrl, 'estado': estado, 'fechaInicio': Timestamp.fromDate(fechaInicio), 'fechaFin': Timestamp.fromDate(fechaFin), 'observaciones': observaciones, 'codigoCorrelativo': codigoCorrelativo, 'fotoUrl': fotoUrl, 'nombreInspecciona': nombreInspecciona, 'rutInspecciona': rutInspecciona};
+  @override
+  Map<String, dynamic> toMap() => {
+    'cliente': cliente,
+    'sede': sede,
+    'tecnicoId': tecnicoId,
+    'fechaCreacion': fechaCreacion,
+    'tipoServicio': 'recu',
+    'fechaInicio': fechaInicio,
+    'fechaFin': fechaFin,
+    'observaciones': observaciones,
+    'nombreInspecciona': nombreInspecciona,
+    'rutInspecciona': rutInspecciona,
+    'codigoCorrelativo': codigoCorrelativo,
+    'fotoUrl': fotoUrl,
+    'firmaUrl': firmaUrl,
+    'estado': estado,
+  };
 
-  // NUEVO: Lectura
-  factory InformeRecuperacion.fromMap(Map<String, dynamic> map, String id) {
-    return InformeRecuperacion(
-      id: id,
-      cliente: map['cliente'] ?? '',
-      sede: map['sede'] ?? '',
-      tecnicoId: map['tecnicoId'] ?? '',
-      fechaCreacion: (map['fechaCreacion'] as Timestamp).toDate(),
-      firmaUrl: map['firmaUrl'],
-      estado: map['estado'] ?? 'pendiente',
-      fechaInicio: (map['fechaInicio'] as Timestamp).toDate(),
-      fechaFin: (map['fechaFin'] as Timestamp).toDate(),
-      observaciones: map['observaciones'] ?? '',
-      codigoCorrelativo: map['codigoCorrelativo'],
-      fotoUrl: map['fotoUrl'],
-      nombreInspecciona: map['nombreInspecciona'],
-      rutInspecciona: map['rutInspecciona'],
-    );
-  }
+  factory InformeRecuperacion.fromMap(Map<String, dynamic> map, String id) => InformeRecuperacion(
+    id: id,
+    cliente: map['cliente'] ?? '',
+    sede: map['sede'] ?? '',
+    tecnicoId: map['tecnicoId'] ?? '',
+    fechaCreacion: (map['fechaCreacion'] as dynamic).toDate(),
+    fechaInicio: (map['fechaInicio'] as dynamic).toDate(),
+    fechaFin: (map['fechaFin'] as dynamic).toDate(),
+    observaciones: map['observaciones'] ?? '',
+    nombreInspecciona: map['nombreInspecciona'],
+    rutInspecciona: map['rutInspecciona'],
+    codigoCorrelativo: map['codigoCorrelativo'],
+    fotoUrl: map['fotoUrl'],
+    firmaUrl: map['firmaUrl'],
+    estado: map['estado'] ?? 'borrador',
+  );
 }
 
+// --- 5. INFORME CONSTANCIA ---
 class InformeConstancia extends InformeBase {
-  DateTime fechaServicio; String numeroConstancia; String descripcionTrabajo; String? nombreInspecciona; String? rutInspecciona; String? fotoUrl;
+  DateTime fechaServicio;
+  String numeroConstancia;
+  String descripcionTrabajo;
+  String observaciones;
+  String? nombreInspecciona;
+  String? rutInspecciona;
 
-  InformeConstancia({super.id, required super.cliente, required super.sede, required super.tecnicoId, required super.fechaCreacion, super.firmaUrl, super.estado, required this.fechaServicio, required this.numeroConstancia, required this.descripcionTrabajo, super.observaciones, super.codigoCorrelativo, this.nombreInspecciona, this.rutInspecciona, this.fotoUrl}) : super(tipoServicio: 'cons');
+  InformeConstancia({
+    super.id,
+    required super.cliente,
+    required super.sede,
+    required super.tecnicoId,
+    required super.fechaCreacion,
+    required this.fechaServicio,
+    required this.numeroConstancia,
+    required this.descripcionTrabajo,
+    required this.observaciones,
+    this.nombreInspecciona,
+    this.rutInspecciona,
+    super.codigoCorrelativo,
+    super.fotoUrl,
+    super.firmaUrl,
+    super.estado,
+  }) : super(tipoServicio: 'cons');
 
-  @override Map<String, dynamic> toMap() => {'cliente': cliente, 'sede': sede, 'tecnicoId': tecnicoId, 'fechaCreacion': Timestamp.fromDate(fechaCreacion), 'tipoServicio': 'cons', 'firmaUrl': firmaUrl, 'estado': estado, 'fechaServicio': Timestamp.fromDate(fechaServicio), 'numeroConstancia': numeroConstancia, 'descripcionTrabajo': descripcionTrabajo, 'observaciones': observaciones, 'codigoCorrelativo': codigoCorrelativo, 'nombreInspecciona': nombreInspecciona, 'rutInspecciona': rutInspecciona, 'fotoUrl': fotoUrl};
+  @override
+  Map<String, dynamic> toMap() => {
+    'cliente': cliente,
+    'sede': sede,
+    'tecnicoId': tecnicoId,
+    'fechaCreacion': fechaCreacion,
+    'tipoServicio': 'cons',
+    'fechaServicio': fechaServicio,
+    'numeroConstancia': numeroConstancia,
+    'descripcionTrabajo': descripcionTrabajo,
+    'observaciones': observaciones,
+    'nombreInspecciona': nombreInspecciona,
+    'rutInspecciona': rutInspecciona,
+    'codigoCorrelativo': codigoCorrelativo,
+    'fotoUrl': fotoUrl,
+    'firmaUrl': firmaUrl,
+    'estado': estado,
+  };
 
-  // NUEVO: Lectura
-  factory InformeConstancia.fromMap(Map<String, dynamic> map, String id) {
-    return InformeConstancia(
-      id: id,
-      cliente: map['cliente'] ?? '',
-      sede: map['sede'] ?? '',
-      tecnicoId: map['tecnicoId'] ?? '',
-      fechaCreacion: (map['fechaCreacion'] as Timestamp).toDate(),
-      firmaUrl: map['firmaUrl'],
-      estado: map['estado'] ?? 'pendiente',
-      fechaServicio: (map['fechaServicio'] as Timestamp).toDate(),
-      numeroConstancia: map['numeroConstancia'] ?? '',
-      descripcionTrabajo: map['descripcionTrabajo'] ?? '',
-      observaciones: map['observaciones'] ?? '',
-      codigoCorrelativo: map['codigoCorrelativo'],
-      nombreInspecciona: map['nombreInspecciona'],
-      rutInspecciona: map['rutInspecciona'],
-      fotoUrl: map['fotoUrl'],
-    );
-  }
+  factory InformeConstancia.fromMap(Map<String, dynamic> map, String id) => InformeConstancia(
+    id: id,
+    cliente: map['cliente'] ?? '',
+    sede: map['sede'] ?? '',
+    tecnicoId: map['tecnicoId'] ?? '',
+    fechaCreacion: (map['fechaCreacion'] as dynamic).toDate(),
+    fechaServicio: (map['fechaServicio'] as dynamic).toDate(),
+    numeroConstancia: map['numeroConstancia'] ?? '',
+    descripcionTrabajo: map['descripcionTrabajo'] ?? '',
+    observaciones: map['observaciones'] ?? '',
+    nombreInspecciona: map['nombreInspecciona'],
+    rutInspecciona: map['rutInspecciona'],
+    codigoCorrelativo: map['codigoCorrelativo'],
+    fotoUrl: map['fotoUrl'],
+    firmaUrl: map['firmaUrl'],
+    estado: map['estado'] ?? 'borrador',
+  );
+}
+
+class InformeGenerico extends InformeBase {
+  InformeGenerico({required super.cliente, required super.sede, required super.tecnicoId, required super.fechaCreacion, required super.tipoServicio, super.id});
+  @override Map<String, dynamic> toMap() => {};
+  factory InformeGenerico.fromMap(Map<String, dynamic> map, String id) => InformeGenerico(cliente: '', sede: '', tecnicoId: '', fechaCreacion: DateTime.now(), tipoServicio: 'unknown', id: id);
 }

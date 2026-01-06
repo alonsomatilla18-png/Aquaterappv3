@@ -5,12 +5,22 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:async';
-import '../screens/login_screen.dart'; 
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Importante para el Rastreador
+// import '../screens/login_screen.dart'; // Ya no es necesario importar la pantalla interna si vamos a la web externa
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 
 // ==========================================
-// 1. SYSTEM DESIGN & CONFIG (AQUATER ENTERPRISE - VISUAL UPGRADE)
+// 1. CONFIGURACIÓN GLOBAL Y UTILIDADES
 // ==========================================
+
+// ✅ FUNCIÓN DE NAVEGACIÓN GLOBAL (Soluciona errores de navegación)
+Route _createRoute(Widget page) {
+  return PageRouteBuilder(
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
+}
 
 class AppColors {
   static const Color primary = Color(0xFF005696);    // Azul Corporativo Profundo
@@ -102,6 +112,22 @@ Widget safeNetworkImage(String url, {double? height, BoxFit fit = BoxFit.cover})
   );
 }
 
+Widget _PageHeader({required String title, required String subtitle}) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 100, horizontal: 20),
+    decoration: const BoxDecoration(
+      color: AppColors.surface,
+      border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))) // Borde sutil inferior
+    ),
+    child: Column(children: [
+      Text(title, style: AppTextStyles.h2, textAlign: TextAlign.center),
+      const SizedBox(height: 15),
+      Text(subtitle, style: AppTextStyles.body, textAlign: TextAlign.center),
+    ]),
+  );
+}
+
 // ==========================================
 // 2. PÁGINA PRINCIPAL (LANDING PAGE)
 // ==========================================
@@ -157,7 +183,7 @@ class _LandingPageState extends State<LandingPage> {
               _HeroSection(isMobile: isMobile),
               _IntroductionText(isMobile: isMobile),
               
-              // ✅ AHORA CONECTADO A FIREBASE
+              // ✅ RASTREADOR CONECTADO
               _ServiceTracker(isMobile: isMobile),
 
               _ValueTrilogy(isMobile: isMobile).animate().fadeIn(delay: 200.ms).moveY(begin: 30, end: 0),
@@ -180,6 +206,7 @@ class _LandingPageState extends State<LandingPage> {
               
               _InteractiveMapSection(isMobile: isMobile), 
               
+              // ✅ FORMULARIO CONECTADO
               _QuickContactFormSection(isMobile: isMobile), 
               
               const WebFooter(),
@@ -494,13 +521,10 @@ class _ServiceTrackerState extends State<_ServiceTracker> {
   String? _status;
   bool _hasError = false;
 
-  // ✅ LOGICA REAL CONECTADA A FIREBASE
-// En _ServiceTrackerState dentro de landing_page.dart
-
   void _checkStatus() async {
     FocusScope.of(context).unfocus(); 
     
-    String inputRaw = _controller.text.trim().toUpperCase(); // <-- LA CLAVE: MAYÚSCULAS
+    String inputRaw = _controller.text.trim().toUpperCase(); 
 
     if (inputRaw.isEmpty) {
       setState(() {
@@ -516,22 +540,18 @@ class _ServiceTrackerState extends State<_ServiceTracker> {
     });
 
     try {
-      print("Buscando en Firebase: $inputRaw"); // Debug para ver en consola del navegador
-
       final query = await FirebaseFirestore.instance
           .collection('informes')
-          .where('codigoCorrelativo', isEqualTo: inputRaw) // Usamos el input normalizado
+          .where('codigoCorrelativo', isEqualTo: inputRaw) 
           .limit(1)
           .get();
 
       if (query.docs.isNotEmpty) {
         final data = query.docs.first.data();
-        // Usamos valores por defecto por si el campo no existe
         final String tecnico = data['tecnicoId'] ?? "Técnico Asignado";
         final String sede = data['sede'] ?? "Instalación del Cliente";
         final String tipo = (data['tipoServicio'] ?? "Servicio").toString().toUpperCase();
         
-        // Formato de fecha seguro
         String fecha = "Fecha no registrada";
         if (data['fechaCreacion'] != null) {
           final Timestamp ts = data['fechaCreacion'];
@@ -768,6 +788,7 @@ class _DiagnosticWizardState extends State<_DiagnosticWizard> {
   }
 }
 
+// ✅ SECCIÓN DE CONTACTO CONECTADA
 class _QuickContactFormSection extends StatefulWidget {
   final bool isMobile;
   final bool isDark; 
@@ -780,14 +801,43 @@ class _QuickContactFormSectionState extends State<_QuickContactFormSection> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _phoneCtrl = TextEditingController();
+  final TextEditingController _emailCtrl = TextEditingController(); // ✅ Campo nuevo
+  bool _isLoading = false;
 
-  void _submit() {
+  void _submit() async {
     if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Solicitud enviada. Un experto lo contactará en breve."), backgroundColor: AppColors.success)
-      );
-      _nameCtrl.clear();
-      _phoneCtrl.clear();
+      setState(() => _isLoading = true);
+
+      try {
+        // ✅ Guardamos en Firebase
+        await FirebaseFirestore.instance.collection('solicitudes_web').add({
+          'nombre': _nameCtrl.text.trim(),
+          'telefono': _phoneCtrl.text.trim(),
+          'email': _emailCtrl.text.trim(),
+          'fecha': FieldValue.serverTimestamp(),
+          'estado': 'pendiente',
+          'origen': widget.isMobile ? 'Web Móvil' : 'Web Escritorio'
+        });
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("¡Solicitud enviada! Un experto lo contactará en breve."), 
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          )
+        );
+        _nameCtrl.clear();
+        _phoneCtrl.clear();
+        _emailCtrl.clear();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error de conexión: $e"), backgroundColor: AppColors.danger)
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -865,19 +915,26 @@ class _QuickContactFormSectionState extends State<_QuickContactFormSection> {
                     decoration: const InputDecoration(labelText: "Teléfono de Contacto", prefixIcon: Icon(Icons.phone_android), border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF8FAFC)),
                   ),
                   const SizedBox(height: 20),
-                  const TextField(decoration: InputDecoration(labelText: "Correo Electrónico", prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF8FAFC))),
+                  TextFormField( // ✅ Campo Email
+                    controller: _emailCtrl,
+                    validator: (v) => v == null || !v.contains('@') ? "Ingrese un email válido" : null,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: "Correo Electrónico", prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF8FAFC)),
+                  ),
                   const SizedBox(height: 30),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _submit, 
+                      onPressed: _isLoading ? null : _submit, 
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary, 
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 5
                       ),
-                      child: const Text("ENVIAR SOLICITUD AHORA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: _isLoading 
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text("ENVIAR SOLICITUD AHORA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -890,16 +947,6 @@ class _QuickContactFormSectionState extends State<_QuickContactFormSection> {
       ),
     );
   }
-}
-
-Widget _BenefitChip(String text, Color color) {
-  return Row(
-    children: [
-      const Icon(Icons.check_circle_rounded, color: AppColors.success), 
-      const SizedBox(width: 8), 
-      Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold))
-    ],
-  );
 }
 
 class _CalculatorSection extends StatefulWidget {
@@ -2353,6 +2400,56 @@ class _ProjectDetailCard extends StatelessWidget {
   }
 }
 
+class _ProjectsSection extends StatelessWidget {
+  final bool isMobile;
+  const _ProjectsSection({required this.isMobile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(vertical: 80, horizontal: isMobile ? 20 : 100),
+      child: Column(
+        children: [
+          Text("PROYECTOS DE INGENIERÍA", style: AppTextStyles.h2, textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          const Text(
+            "Además de la mantención, diseñamos y ejecutamos obras nuevas.", 
+            style: TextStyle(fontSize: 18, color: Colors.grey), 
+            textAlign: TextAlign.center
+          ),
+          const SizedBox(height: 50),
+          Wrap(
+            spacing: 30,
+            runSpacing: 30,
+            alignment: WrapAlignment.center,
+            children: [
+              _ProjectDetailCard(
+                "Equipos de Impulsión", 
+                "Instalación en todo Chile. Automatización avanzada, tableros y motobombas de calidad. Revisamos sus proyectos para mejorar eficiencia.", 
+                isMobile, 
+                context
+              ),
+              _ProjectDetailCard(
+                "Instalación Sanitaria", 
+                "Sistemas completos de agua potable, alcantarillado, gas y redes de incendio. Cumplimiento estricto de normativa RIDAA.", 
+                isMobile, 
+                context
+              ),
+              _ProjectDetailCard(
+                "Climatización e Hidráulica", 
+                "Plantas de tratamiento y osmosis inversa. Trabajamos de la mano con constructoras y arquitectos.", 
+                isMobile, 
+                context
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+}
+
 class _ValueCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -2471,6 +2568,13 @@ class _ContactTileState extends State<_ContactTile> {
   }
 }
 
+// ✅ WIDGET QUE FALTABA
+class _BenefitChip extends StatelessWidget { 
+  final String text; final Color color; 
+  const _BenefitChip(this.text, this.color); 
+  @override Widget build(BuildContext context) { return Row(children: [const Icon(Icons.check, color: AppColors.success, size: 16), const SizedBox(width: 5), Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold))]); } 
+}
+
 // ==========================================
 // 7. NAVEGACIÓN GLOBAL Y FOOTER
 // ==========================================
@@ -2506,8 +2610,13 @@ class WebNavBar extends StatelessWidget implements PreferredSizeWidget {
               _NavLink("Nosotros", const AboutPage(), activePage == "Nosotros", context),
               _NavLink("Contacto", const ContactPage(), activePage == "Contacto", context),
               const SizedBox(width: 30),
+              
+              // ✅ CORRECCIÓN: Botón ahora redirige a la App externa
               ElevatedButton(
-                onPressed: () => Navigator.push(context, _createRoute(const LoginScreen())),
+                onPressed: () async {
+                   final Uri url = Uri.parse('https://app.aquater.cl');
+                   await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary, 
                   foregroundColor: Colors.white, 
@@ -2568,12 +2677,19 @@ class _NavLinkState extends State<_NavLink> {
   }
 }
 
+// ✅ CORRECCIÓN: Se agregó el botón Acceso Clientes al menú móvil
 class MobileDrawer extends StatelessWidget {
   const MobileDrawer({super.key});
 
   void _navigate(BuildContext context, Widget page) {
     Navigator.pop(context); 
     Navigator.pushReplacement(context, _createRoute(page));
+  }
+  
+  // Función para abrir la app externa
+  void _openSystem() async {
+    final Uri url = Uri.parse('https://app.aquater.cl');
+    await launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -2588,6 +2704,15 @@ class MobileDrawer extends StatelessWidget {
       ListTile(leading: const Icon(Icons.menu_book_rounded), title: const Text("Glosario"), onTap: () => _navigate(context, const GlossaryPage())),
       ListTile(leading: const Icon(Icons.groups_rounded), title: const Text("Nosotros"), onTap: () => _navigate(context, const AboutPage())),
       ListTile(leading: const Icon(Icons.phone_rounded), title: const Text("Contacto"), onTap: () => _navigate(context, const ContactPage())),
+      
+      const Divider(), // Separador visual
+      
+      // Botón nuevo para el celular
+      ListTile(
+        leading: const Icon(Icons.lock_person_rounded, color: AppColors.accent), 
+        title: const Text("ACCESO CLIENTES", style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)), 
+        onTap: _openSystem, // Redirige a app.aquater.cl
+      ),
     ]));
   }
 }
@@ -2689,81 +2814,5 @@ class SosButton extends StatelessWidget {
       icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.white),
       label: const Text("EMERGENCIA 24/7", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
     ).animate(onPlay: (c) => c.repeat()).shimmer(duration: 2500.ms, color: Colors.white.withOpacity(0.4));
-  }
-}
-
-Widget _PageHeader({required String title, required String subtitle}) {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 100, horizontal: 20),
-    decoration: const BoxDecoration(
-      color: AppColors.surface,
-      border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))) // Borde sutil inferior
-    ),
-    child: Column(children: [
-      Text(title, style: AppTextStyles.h2, textAlign: TextAlign.center),
-      const SizedBox(height: 15),
-      Text(subtitle, style: AppTextStyles.body, textAlign: TextAlign.center),
-    ]),
-  );
-}
-
-Route _createRoute(Widget page) {
-  return PageRouteBuilder(
-    pageBuilder: (context, animation, secondaryAnimation) => page,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return FadeTransition(opacity: animation, child: child);
-    },
-  );
-}
-// --- PEGAR ESTO AL FINAL DE lib/web/landing_page.dart ---
-
-class _ProjectsSection extends StatelessWidget {
-  final bool isMobile;
-  const _ProjectsSection({required this.isMobile});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(vertical: 80, horizontal: isMobile ? 20 : 100),
-      child: Column(
-        children: [
-          Text("PROYECTOS DE INGENIERÍA", style: AppTextStyles.h2, textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          const Text(
-            "Además de la mantención, diseñamos y ejecutamos obras nuevas.", 
-            style: TextStyle(fontSize: 18, color: Colors.grey), 
-            textAlign: TextAlign.center
-          ),
-          const SizedBox(height: 50),
-          Wrap(
-            spacing: 30,
-            runSpacing: 30,
-            alignment: WrapAlignment.center,
-            children: [
-              _ProjectDetailCard(
-                "Equipos de Impulsión", 
-                "Instalación en todo Chile. Automatización avanzada, tableros y motobombas de calidad. Revisamos sus proyectos para mejorar eficiencia.", 
-                isMobile, 
-                context
-              ),
-              _ProjectDetailCard(
-                "Instalación Sanitaria", 
-                "Sistemas completos de agua potable, alcantarillado, gas y redes de incendio. Cumplimiento estricto de normativa RIDAA.", 
-                isMobile, 
-                context
-              ),
-              _ProjectDetailCard(
-                "Climatización e Hidráulica", 
-                "Plantas de tratamiento y osmosis inversa. Trabajamos de la mano con constructoras y arquitectos.", 
-                isMobile, 
-                context
-              ),
-            ],
-          )
-        ],
-      ),
-    );
   }
 }
