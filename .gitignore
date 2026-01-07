@@ -1,13 +1,35 @@
-# Archivos de Flutter/Dart que NO deben subirse
+# --- SEGURIDAD (CRÍTICO) ---
+# No subir credenciales de correo ni llaves de API
+.env
+
+# --- Flutter/Dart ---
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
+.pub-cache/
+.pub/
 build/
+
+# --- Android ---
+android/.gradle
+android/local.properties
+android/app/src/main/res/drawable-*/launcher_icon.png
+android/app/src/main/res/mipmap-*/launcher_icon.png
+
+# --- iOS ---
 ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
-android/.gradle
+ios/Pods/
+DerivedData/
+
+# --- IDEs y Editores ---
 .idea/
 .vscode/
 *.iml
-*.DS_Store
+*.swp
+*~
+
+# --- Sistema ---
+.DS_Store
+Thumbs.db
